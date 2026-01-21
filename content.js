@@ -83,12 +83,13 @@ async function getCommuteTime(addressText) {
       }
 
       const mins = Math.max(0, Math.round(leg.duration / 60));
+      const timeStr = getLocalTimeStr(leg.expectedStartTime);
       if (leg.mode.toUpperCase() === "FOOT") {
         const dist = leg.distance ? ` (${fmtMeters(leg.distance)})` : "";
-        lines.push({ text: `🚶 Walk ${mins} min${dist}`, tone: "normal" });
+        lines.push({ text: `🚶 Walk ${mins} min${dist}, ${timeStr}`, tone: "normal" });
       } else {
         const label = fmtLineLabel(leg) || "Transit";
-        lines.push({ text: `${label}, ${mins} min`, tone: "normal" });
+        lines.push({ text: `${label}, ${mins} min, ${timeStr}`, tone: "normal" });
       }
     });
 
