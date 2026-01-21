@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Finn Pendle Tid",
+  "version": "1.0",
+  "permissions": ["tabs", "webNavigation"],
+  "host_permissions": [
+    "https://www.finn.no/*",
+    "https://api.entur.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.finn.no/realestate/homes/ad.html?finnkode=*"],
+      "js": ["toast.js", "content.js"]
+    }
+  ]
+}
