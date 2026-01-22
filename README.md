@@ -1,3 +1,4 @@
+<!-- cSpell:disable -->
 # Finn Pendle Tid
 
 En Chrome extension som automatisk viser pendletid fra boligannonser på Finn.no til ditt arbeidssted.
