@@ -12,7 +12,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.finn.no/realestate/homes/ad.html?finnkode=*"],
+      "matches": ["https://www.finn.no/realestate/homes/ad.html?finnkode=*", "https://www.finn.no/realestate/lettings/ad.html?finnkode=*"],
       "js": ["toast.js", "content.js"]
     }
   ]

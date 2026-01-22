@@ -1,7 +1,7 @@
 const DESTINATION = { lat: 59.90386208001988, lon: 10.739245328835816 }; // Vippetangen
 const CLIENT_NAME = "olerd-finn-transit-extension";
-// Use the explicit +02:00 offset to lock the query to Norway's May timezone
-const MONDAY_18_MAY_OSLO = "2026-05-18T08:00:00+02:00";
+const ARRIVAL_TIME = "2026-05-18T08:00:00+02:00";
+const USE_ARRIVAL_TIME = true;
 
 /**
  * Extracts "HH:mm" from an ISO string without using local Date methods
@@ -43,11 +43,14 @@ async function getCommuteTime(addressText) {
       trip(
         from: { coordinates: { latitude: ${lat}, longitude: ${lon} } }
         to: { coordinates: { latitude: ${DESTINATION.lat}, longitude: ${DESTINATION.lon} } }
-        dateTime: "${MONDAY_18_MAY_OSLO}"
-        arriveBy: true
+        ${USE_ARRIVAL_TIME ? `dateTime: "${ARRIVAL_TIME}"` : ''}
+        ${USE_ARRIVAL_TIME ? 'arriveBy: true' : ''}
+        numTripPatterns: 1
+        walkReluctance: 10
       ) {
         tripPatterns {
           duration
+          streetDistance
           legs {
             mode
             expectedStartTime
@@ -94,7 +97,7 @@ async function getCommuteTime(addressText) {
     });
 
     return {
-      header: `${Math.round(pattern.duration / 60)} min commute to work (arrive before 08:00)`,
+      header: `${Math.round(pattern.duration / 60)} min commute ${USE_ARRIVAL_TIME ? `(arrive before ${getLocalTimeStr(ARRIVAL_TIME)})` : ''}<br>Walking distance: ${pattern.streetDistance}m`,
       subheader: `Leave ${getLocalTimeStr(legs[0].expectedStartTime)} • Arrive ${getLocalTimeStr(legs[legs.length - 1].expectedEndTime)}`,
       lines
     };
@@ -112,6 +115,7 @@ async function findAddress() {
     const commuteModel = await getCommuteTime(element.innerText.trim());
     if (commuteModel) window.showTransitToast?.(commuteModel);
   } else if (!element) {
+    console.log("📍 Transit Helper: Address element not found, retrying...");
     setTimeout(findAddress, 500);
   }
 }
