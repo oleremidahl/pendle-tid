@@ -50,14 +50,33 @@ Erstatt med ditt eget arbeidssted sine koordinater (lat/lon).
 
 ### Planlegge rute basert på ankomsttid
 
-For å få ruter som ankommer før et bestemt tidspunkt, åpne `content.js` og endre:
+Du har tre alternativer for hvordan extensionen skal beregne ruter:
+
+**Alternativ 1: Bruk neste mandag kl. 08:00 (anbefalt for jobb-pendling)**
 
 ```javascript
-const USE_ARRIVAL_TIME = false;  // Sett til true for å aktivere
-const ARRIVAL_TIME = "2026-05-18T08:00:00+02:00";  // Ønsket ankomsttid
+const USE_ARRIVAL_TIME = true;
+const ARRIVAL_TIME = getNextMondayOslo();
 ```
 
-Når `USE_ARRIVAL_TIME` er `true`, vil extensionen vise ruter som ankommer før det angitte tidspunktet.
+Dette er nyttig for å se pendletid til jobb - viser alltid ruter som ankommer mandager kl. 08:00 Oslo-tid.
+
+**Alternativ 2: Sett en fast ankomsttid**
+
+```javascript
+const USE_ARRIVAL_TIME = true;
+const ARRIVAL_TIME = "2026-05-18T08:00:00+02:00";  // Din ønskede ankomsttid
+```
+
+Bruk et ISO-format med tidssone-offset.
+
+**Alternativ 3: Vis neste tilgjengelige rute (standard)**
+
+```javascript
+const USE_ARRIVAL_TIME = false;
+```
+
+Viser bare neste/raskeste rute uten å ta hensyn til ankomsttid.
 
 **Viktig:** Etter å ha gjort endringer i koden, må du refreshe extensionen i Chrome:
 1. Gå til `chrome://extensions/`

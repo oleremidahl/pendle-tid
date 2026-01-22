@@ -1,6 +1,7 @@
 const DESTINATION = { lat: 59.90386208001988, lon: 10.739245328835816 }; // Vippetangen
 const CLIENT_NAME = "olerd-finn-transit-extension";
-const ARRIVAL_TIME = "2026-05-18T08:00:00+02:00";
+// const ARRIVAL_TIME = "2026-01-19T08:00:00+02:00";
+const ARRIVAL_TIME = getNextMondayOslo();
 const USE_ARRIVAL_TIME = true;
 
 /**
@@ -11,6 +12,96 @@ function getLocalTimeStr(isoStr) {
   if (!isoStr) return "";
   // Input: "2026-05-18T07:45:00+02:00" -> Result: "07:45"
   return isoStr.split("T")[1].substring(0, 5);
+}
+
+/**
+ * Returns an ISO string for next Monday 8AM Oslo time.
+ * Works regardless of the user's local timezone.
+ * 
+ * @returns {string} ISO string like "2026-01-27T08:00:00+01:00"
+ */
+function getNextMondayOslo() {
+  // Get current date in Oslo timezone
+  const now = new Date();
+  const osloFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Oslo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  // Parse current Oslo time
+  const parts = osloFormatter.formatToParts(now);
+  const getValue = (type) => parts.find(p => p.type === type)?.value;
+  
+  const osloYear = parseInt(getValue('year'));
+  const osloMonth = parseInt(getValue('month')) - 1; // JS months are 0-indexed
+  const osloDay = parseInt(getValue('day'));
+  
+  // Create a date object representing "today" in Oslo
+  const osloToday = new Date(Date.UTC(osloYear, osloMonth, osloDay));
+  
+  // Calculate days until next Monday (1 = Monday, 0 = Sunday)
+  const currentDay = osloToday.getUTCDay();
+  const daysUntilMonday = currentDay === 0 ? 1 : currentDay === 1 ? 7 : (8 - currentDay);
+  
+  // Get next Monday
+  const nextMonday = new Date(osloToday);
+  nextMonday.setUTCDate(osloToday.getUTCDate() + daysUntilMonday);
+  
+  // Format as YYYY-MM-DD
+  const year = nextMonday.getUTCFullYear();
+  const month = String(nextMonday.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(nextMonday.getUTCDate()).padStart(2, '0');
+  
+  // Create a date at 8:00 Oslo time on that Monday
+  const targetDate = new Date(`${year}-${month}-${day}T08:00:00`);
+  
+  // Determine Oslo timezone offset for that specific date
+  const osloOffset = getOsloOffset(targetDate);
+  
+  // Return ISO string with Oslo offset
+  return `${year}-${month}-${day}T08:00:00${osloOffset}`;
+}
+
+/**
+ * Get the timezone offset for Oslo at a specific date.
+ * Oslo uses CET (UTC+1) in winter and CEST (UTC+2) in summer.
+ * 
+ * @param {Date} date - The date to check
+ * @returns {string} Offset string like "+01:00" or "+02:00"
+ */
+function getOsloOffset(date) {
+  // Create formatter for Oslo timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Oslo',
+    timeZoneName: 'longOffset'
+  });
+  
+  // Get the formatted string with offset
+  const parts = formatter.formatToParts(date);
+  const offsetPart = parts.find(p => p.type === 'timeZoneName');
+  
+  if (offsetPart && offsetPart.value.includes('GMT')) {
+    // Parse "GMT+1" or "GMT+2"
+    const offset = offsetPart.value.replace('GMT', '').replace('+', '');
+    return `+${offset.padStart(2, '0')}:00`;
+  }
+  
+  // Fallback: manually check DST
+  // DST in Oslo typically: last Sunday of March to last Sunday of October
+  const month = date.getMonth();
+  
+  // Rough approximation: DST is active from April to October
+  if (month >= 3 && month <= 9) {
+    return '+02:00'; // CEST (summer time)
+  } else {
+    return '+01:00'; // CET (winter time)
+  }
 }
 
 function fmtMeters(m) {
