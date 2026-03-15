@@ -241,6 +241,55 @@ button:disabled {
   color: #8d2f2a;
 }
 
+.disclosure-card {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(22, 39, 70, 0.08);
+  border-radius: 18px;
+  background: rgba(22, 39, 70, 0.04);
+}
+
+.disclosure-card h2,
+.disclosure-card p {
+  margin: 0;
+}
+
+.disclosure-card h2 {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.disclosure-card p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.disclosure-card code {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(22, 39, 70, 0.08);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.disclosure-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.disclosure-links a {
+  color: var(--accent-strong);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.disclosure-links a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 640px) {
   .options-shell {
     width: calc(100vw - 24px);

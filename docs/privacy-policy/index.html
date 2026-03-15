@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Personvernerklæring | Finn Pendle Tid</title>
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero">
+        <p class="kicker">Finn Pendle Tid</p>
+        <h1>Personvernerklæring</h1>
+        <p class="lead">
+          Denne siden beskriver hvilke data Chrome-utvidelsen bruker, hvorfor de brukes, og hvem de deles med for å levere pendlesammenligningen.
+        </p>
+        <nav class="hero-nav" aria-label="Hurtiglenker">
+          <a href="../">Forside</a>
+          <a href="../support/">Support</a>
+          <a href="https://github.com/oleremidahl/pendle-tid" target="_blank" rel="noreferrer">Kildekode</a>
+        </nav>
+        <p class="meta">Sist oppdatert: 15. mars 2026</p>
+      </section>
+
+      <section class="content-card" aria-labelledby="privacy-summary">
+        <h2 id="privacy-summary">Kort oppsummert</h2>
+        <p>
+          Finn Pendle Tid bruker bare data som er nødvendig for å vise reisetid fra en FINN-boligannonse til reisemålet du selv har lagret.
+          Utvidelsen har ingen egen backend, bruker ikke analyseverktøy, viser ikke annonser og selger ikke data.
+        </p>
+
+        <h3>Data utvidelsen leser fra FINN</h3>
+        <p>
+          Når du åpner en støttet boligannonse på FINN.no, leser utvidelsen adresseteksten som vises i annonsen. Dette brukes bare for å beregne reisetid.
+        </p>
+
+        <h3>Data du selv lagrer</h3>
+        <p>
+          Når du setter opp utvidelsen, lagres reisemålet ditt og ønsket ankomsttid i <code>chrome.storage.sync</code>. Dette gjør at innstillingene dine kan være tilgjengelige i Chrome der du er logget inn med samme profil.
+        </p>
+
+        <h3>Data som sendes til tredjeparter</h3>
+        <p>
+          For å hente geokoding og rutedata sender utvidelsen nødvendig adresseinformasjon til Entur over HTTPS. Det gjelder:
+        </p>
+        <ul>
+          <li>adresseteksten fra FINN-annonsen du ser på</li>
+          <li>reisemålet du har valgt i innstillingene</li>
+          <li>forespurt ankomsttid for ruteberegningen</li>
+        </ul>
+        <p>
+          Opplysningene sendes kun for å levere utvidelsens kjernefunksjon. Utvidelsen deler ikke data med andre tjenester enn Entur.
+        </p>
+
+        <h3>Hva utvidelsen ikke gjør</h3>
+        <ul>
+          <li>samler ikke inn nettleserhistorikk utover den aktuelle FINN-siden du åpner</li>
+          <li>bruker ikke egne servere eller skytjenester for lagring</li>
+          <li>bruker ikke analyseverktøy, sporing eller annonsering</li>
+          <li>selger ikke data og bruker ikke data til kredittvurdering eller markedsføring</li>
+        </ul>
+
+        <h3>Lagring og sletting</h3>
+        <p>
+          Lagrede innstillinger blir liggende i Chrome-synkronisering til du endrer dem, sletter dem i utvidelsen eller avinstallerer utvidelsen. Selve utvidelsen lagrer ikke rutedata eller FINN-adresser permanent.
+        </p>
+
+        <h3>Dine valg</h3>
+        <p>
+          Du kan når som helst åpne innstillingene og endre eller slette reisemålet ditt. Hvis du ikke lagrer et reisemål, henter ikke utvidelsen ruter.
+        </p>
+
+        <h3>Tredjepartsbehandling</h3>
+        <p>
+          Entur er en selvstendig tredjepart for geokoding og ruteberegning. Deres eventuelle logging eller behandling av forespørsler reguleres av Enturs egne vilkår og personvernpraksis.
+        </p>
+
+        <h3>Kontakt</h3>
+        <p>
+          Hvis du har spørsmål om denne personvernerklæringen eller hvordan utvidelsen fungerer, se
+          <a href="../support/">support-siden</a> eller opprett en sak i
+          <a href="https://github.com/oleremidahl/pendle-tid/issues" target="_blank" rel="noreferrer">GitHub-repoet</a>.
+        </p>
+
+        <p class="footer-note">
+          Denne personvernerklæringen er laget for Chrome Web Store-publisering og skal holdes oppdatert når utvidelsens databruk endres.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
