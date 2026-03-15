@@ -1,6 +1,29 @@
-// Detect when the user navigates to a new ad within the same tab
-chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+const FINN_AD_FILTERS = [
+  { hostSuffix: "finn.no", pathContains: "realestate/homes/ad.html" },
+  { hostSuffix: "finn.no", pathContains: "realestate/lettings/ad.html" }
+];
+
+function safeSendMessage(tabId, message) {
+  chrome.tabs.sendMessage(tabId, message, () => {
+    void chrome.runtime.lastError;
+  });
+}
+
+chrome.webNavigation.onHistoryStateUpdated.addListener(
+  (details) => {
     if (details.url.includes("finnkode=")) {
-        chrome.tabs.sendMessage(details.tabId, { action: "REFRESH_ADDRESS" });
+      safeSendMessage(details.tabId, { action: "REFRESH_ADDRESS" });
     }
-}, { url: [{ hostSuffix: 'finn.no', pathContains: 'realestate/homes/ad.html' }] });
+  },
+  { url: FINN_AD_FILTERS }
+);
+
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
+});
+
+chrome.runtime.onMessage.addListener((request) => {
+  if (request?.action === "OPEN_OPTIONS") {
+    chrome.runtime.openOptionsPage();
+  }
+});
