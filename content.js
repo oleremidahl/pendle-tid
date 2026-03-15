@@ -26,6 +26,7 @@ const osloOffsetFormatter = new Intl.DateTimeFormat("en-US", {
 let currentRequestId = 0;
 let activeController = null;
 let retryTimer = null;
+let isCardDismissed = false;
 
 function createElement(tagName, className, textContent) {
   const node = document.createElement(tagName);
@@ -207,7 +208,6 @@ function normalizeRoute(pattern, variant) {
   return {
     variant,
     totalDuration: formatMinutes(pattern.duration),
-    durationMinutes: Math.max(0, Math.round((pattern.duration || 0) / 60)),
     totalDistanceText: formatDistance(totalDistance),
     leaveTime: getLocalTimeString(legs[0].expectedStartTime),
     arriveTime: getLocalTimeString(legs[legs.length - 1].expectedEndTime),
@@ -216,8 +216,14 @@ function normalizeRoute(pattern, variant) {
 }
 
 function storageGet(keys) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(keys, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get(keys, (items) => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+        return;
+      }
+      resolve(items);
+    });
   });
 }
 
@@ -334,7 +340,7 @@ function createCloseButton() {
   button.type = "button";
   button.setAttribute("aria-label", "Lukk pendlevindu");
   button.addEventListener("click", () => {
-    removeCard();
+    dismissCard();
   });
   return button;
 }
@@ -392,6 +398,13 @@ function removeCard() {
   document.getElementById(CARD_ID)?.remove();
 }
 
+function dismissCard() {
+  isCardDismissed = true;
+  abortActiveRequest();
+  resetRetryTimer();
+  removeCard();
+}
+
 function mountCard(addressElement) {
   const card = getCard();
   const root = document.body || document.documentElement;
@@ -400,6 +413,7 @@ function mountCard(addressElement) {
 }
 
 function renderCard(model) {
+  if (isCardDismissed) return;
   const card = mountCard(model.addressElement);
   card.replaceChildren();
 
@@ -475,34 +489,35 @@ async function refreshCard(addressElement, addressText) {
   abortActiveRequest();
   const controller = new AbortController();
   activeController = controller;
-
-  const settings = await getSettings();
-  if (requestId !== currentRequestId) return;
-
   const cardContext = {
     addressElement,
-    title: settings.destinationLabel
-      ? `Til ${settings.destinationLabel}`
-      : "Sammenlign reisealternativer",
+    title: "Sammenlign reisealternativer",
     subtitle: addressText
   };
 
-  if (!hasValidCoordinates(settings.destinationCoordinates)) {
+  try {
+    const settings = await getSettings();
+    if (requestId !== currentRequestId || isCardDismissed) return;
+
+    cardContext.title = settings.destinationLabel
+      ? `Til ${settings.destinationLabel}`
+      : "Sammenlign reisealternativer";
+
+    if (!hasValidCoordinates(settings.destinationCoordinates)) {
+      renderCard({
+        ...cardContext,
+        status: "missing_settings"
+      });
+      return;
+    }
+
     renderCard({
       ...cardContext,
-      status: "missing_settings"
+      status: "loading"
     });
-    return;
-  }
 
-  renderCard({
-    ...cardContext,
-    status: "loading"
-  });
-
-  try {
     const origin = await geocodePlace(addressText, controller.signal);
-    if (requestId !== currentRequestId) return;
+    if (requestId !== currentRequestId || isCardDismissed) return;
 
     if (!origin) {
       renderCard({
@@ -537,7 +552,7 @@ async function refreshCard(addressElement, addressText) {
       })
     ]);
 
-    if (requestId !== currentRequestId) return;
+    if (requestId !== currentRequestId || isCardDismissed) return;
 
     const transit = normalizeRoute(transitPattern, "transit");
     const walking = normalizeRoute(walkingPattern, "walking");
@@ -578,6 +593,7 @@ function runLookup(attempt = 0) {
   if (attempt === 0) {
     abortActiveRequest();
   }
+  if (isCardDismissed) return;
   resetRetryTimer();
   const addressElement = document.querySelector(ADDRESS_SELECTOR);
   const addressText = normalizeText(addressElement?.textContent || addressElement?.innerText);
@@ -594,6 +610,7 @@ function runLookup(attempt = 0) {
 
 chrome.runtime.onMessage.addListener((request) => {
   if (request?.action === "REFRESH_ADDRESS") {
+    isCardDismissed = false;
     removeCard();
     runLookup();
   }
@@ -602,6 +619,7 @@ chrome.runtime.onMessage.addListener((request) => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "sync") return;
   if (SETTINGS_KEYS.some((key) => Object.prototype.hasOwnProperty.call(changes, key))) {
+    isCardDismissed = false;
     runLookup();
   }
 });

@@ -10,6 +10,7 @@ const saveButton = document.getElementById("save-button");
 const resetButton = document.getElementById("reset-button");
 const savedState = document.getElementById("saved-state");
 const statusMessage = document.getElementById("status-message");
+const DESTINATION_OPTION_ID_PREFIX = "destination-option";
 
 let selectedDestination = null;
 let destinationSuggestions = [];
@@ -19,8 +20,14 @@ let suggestionController = null;
 let suggestionTimer = null;
 
 function storageGet(keys) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(keys, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get(keys, (items) => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+        return;
+      }
+      resolve(items);
+    });
   });
 }
 
@@ -131,9 +138,18 @@ function updateSavedState(values) {
   savedState.textContent = "Ingen reisemål lagret ennå. Når du lagrer et sted her, dukker sammenligningskortet opp automatisk på FINN-annonsene.";
 }
 
+function updateActiveDescendant() {
+  const isActive = activeSuggestionIndex >= 0 && activeSuggestionIndex < destinationSuggestions.length;
+  destinationInput.setAttribute(
+    "aria-activedescendant",
+    isActive ? `${DESTINATION_OPTION_ID_PREFIX}-${activeSuggestionIndex}` : ""
+  );
+}
+
 function setDropdownVisible(isVisible) {
   destinationDropdown.classList.toggle("is-visible", isVisible);
   destinationInput.setAttribute("aria-expanded", isVisible ? "true" : "false");
+  updateActiveDescendant();
 }
 
 function clearSuggestions() {
@@ -157,6 +173,7 @@ function renderSuggestions() {
 
   destinationSuggestions.forEach((suggestion, index) => {
     const button = document.createElement("button");
+    button.id = `${DESTINATION_OPTION_ID_PREFIX}-${index}`;
     button.type = "button";
     button.className = `search-item${index === activeSuggestionIndex ? " is-active" : ""}`;
     button.setAttribute("role", "option");
@@ -312,6 +329,7 @@ async function loadSettings() {
     : null;
   arrivalTimeInput.value = normalized.arrivalTime;
   updateSavedState(normalized);
+  clearSuggestions();
 }
 
 async function handleSave(event) {
