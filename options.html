@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Finn Pendle Tid</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="options-shell">
+      <section class="options-hero">
+        <p class="options-kicker">Finn Pendle Tid</p>
+        <h1>Sammenlign kollektiv og gåtid direkte på FINN</h1>
+        <p class="options-lead">
+          Lagre reisemålet ditt én gang. Deretter viser utvidelsen en ren og fast sammenligning av kollektiv og gange på hver boligannonse.
+        </p>
+      </section>
+
+      <section class="options-card">
+        <form id="settings-form" novalidate>
+          <div class="field">
+            <label for="destination-input">Reisemål</label>
+            <div class="search-shell">
+              <input
+                id="destination-input"
+                name="destination"
+                type="text"
+                placeholder="For eksempel Vippetangen, Oslo"
+                autocomplete="off"
+                spellcheck="false"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="destination-dropdown"
+                required
+              >
+              <div id="destination-dropdown" class="search-dropdown" role="listbox"></div>
+            </div>
+            <p class="field-help">
+              Skriv inn et sted og velg ønsket treff fra listen. Vi lagrer kun et gyldig valg fra Entur.
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="arrival-time-input">Fremme før</label>
+            <input
+              id="arrival-time-input"
+              name="arrivalTime"
+              type="time"
+              value="08:00"
+              required
+            >
+            <p class="field-help">
+              Brukes for kollektiv- og gangsammenligningen på neste hverdag i Oslo-tid.
+            </p>
+          </div>
+
+          <div class="actions">
+            <button id="save-button" type="submit">Lagre innstillinger</button>
+            <button id="reset-button" type="button" class="secondary">Tøm lagret reisemål</button>
+          </div>
+        </form>
+
+        <div id="saved-state" class="saved-state" aria-live="polite"></div>
+        <div id="status-message" class="status-message" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

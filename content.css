@@ -1,0 +1,243 @@
+.fpt-card {
+  --fpt-bg: linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(241, 246, 255, 0.96));
+  --fpt-surface: rgba(255, 255, 255, 0.84);
+  --fpt-border: rgba(35, 64, 111, 0.14);
+  --fpt-text: #13233f;
+  --fpt-muted: #60708a;
+  --fpt-accent: #0f7a72;
+  --fpt-accent-soft: rgba(15, 122, 114, 0.1);
+  box-sizing: border-box;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 999999;
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid var(--fpt-border);
+  background: var(--fpt-bg);
+  box-shadow: 0 20px 48px rgba(16, 39, 76, 0.18);
+  color: var(--fpt-text);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.fpt-card,
+.fpt-card * {
+  box-sizing: border-box;
+}
+
+.fpt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fpt-header-copy {
+  min-width: 0;
+}
+
+.fpt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fpt-kicker,
+.fpt-title,
+.fpt-subtitle,
+.fpt-message-title,
+.fpt-message-copy,
+.fpt-panel-duration {
+  margin: 0;
+}
+
+.fpt-kicker {
+  color: var(--fpt-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.fpt-title {
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.fpt-subtitle {
+  margin-top: 6px;
+  color: var(--fpt-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fpt-link-button {
+  flex-shrink: 0;
+  padding: 8px 11px;
+  border: 1px solid rgba(19, 35, 63, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--fpt-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.fpt-link-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(16, 39, 76, 0.1);
+  border-color: rgba(15, 122, 114, 0.28);
+}
+
+.fpt-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.fpt-message {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--fpt-surface);
+  border: 1px solid rgba(19, 35, 63, 0.08);
+}
+
+.fpt-message-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.fpt-message-copy {
+  margin-top: 6px;
+  color: var(--fpt-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.fpt-panels {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.fpt-panel {
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--fpt-surface);
+  border: 1px solid rgba(19, 35, 63, 0.08);
+  min-width: 0;
+}
+
+.fpt-panel.is-muted {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.fpt-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fpt-panel-title {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.fpt-panel-duration {
+  margin-top: 10px;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.fpt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.fpt-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: var(--fpt-accent-soft);
+  color: var(--fpt-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fpt-details {
+  margin-top: 12px;
+  border-top: 1px solid rgba(19, 35, 63, 0.08);
+  padding-top: 12px;
+}
+
+.fpt-summary {
+  cursor: pointer;
+  color: var(--fpt-text);
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.fpt-summary::-webkit-details-marker {
+  display: none;
+}
+
+.fpt-detail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.fpt-detail-row.is-muted {
+  color: var(--fpt-muted);
+}
+
+.fpt-detail-title,
+.fpt-detail-meta {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fpt-detail-title {
+  font-weight: 700;
+}
+
+.fpt-detail-meta {
+  color: var(--fpt-muted);
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .fpt-card {
+    top: 12px;
+    right: 12px;
+    width: min(320px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    border-radius: 18px;
+    padding: 12px;
+  }
+
+  .fpt-header {
+    gap: 10px;
+  }
+}
