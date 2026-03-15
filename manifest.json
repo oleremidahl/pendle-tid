@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Finn Pendle Tid",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Sammenlign kollektiv pendletid og ren gangtid direkte i FINN-boligannonser.",
-  "permissions": ["storage", "tabs", "webNavigation"],
+  "permissions": ["storage", "webNavigation"],
   "host_permissions": [
     "https://www.finn.no/*",
     "https://api.entur.io/*"
   ],
+  "homepage_url": "https://oleremidahl.github.io/pendle-tid/",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",

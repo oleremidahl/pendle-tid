@@ -49,6 +49,13 @@ På options-siden kan du:
 
 Utvidelsen lagrer bare et gyldig Entur-treff, slik at sammenligningen blir stabil og presis på tvers av annonser.
 
+## Personvern og support
+
+- Personvernerklæring: [oleremidahl.github.io/pendle-tid/privacy-policy](https://oleremidahl.github.io/pendle-tid/privacy-policy/)
+- Supportside: [oleremidahl.github.io/pendle-tid/support](https://oleremidahl.github.io/pendle-tid/support/)
+- Web Store-klargjøring og listing-tekst: [docs/web-store-submission.md](/Users/oleremidahl/Documents/Meg/Prog/pendle-tid/docs/web-store-submission.md)
+- Utgivelsessjekkliste: [docs/release-checklist.md](/Users/oleremidahl/Documents/Meg/Prog/pendle-tid/docs/release-checklist.md)
+
 ## Opplevelse i FINN
 
 - Popupen er liten, fastplassert og enkel å skanne mens du blar i annonser
@@ -63,6 +70,16 @@ Utvidelsen lagrer bare et gyldig Entur-treff, slik at sammenligningen blir stabi
 - **Chrome Extension Manifest V3**
 - Vanilla JavaScript
 - `chrome.storage.sync` for innstillinger
+
+## Pakking for Chrome Web Store
+
+Bruk pakkeskriptet for å lage en ren zip-fil uten lokale artefakter:
+
+```bash
+./scripts/package-extension.sh
+```
+
+Skriptet lager en versjonert zip-fil og en SHA-256-sjekksum i `dist/`.
 
 ## Notater
 
