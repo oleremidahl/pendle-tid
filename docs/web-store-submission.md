@@ -3,7 +3,7 @@
 ## Listing
 
 - Navn: `Finn Pendle Tid`
-- Primarsprak: `Norwegian (nb)`
+- Primærspråk: `Norwegian (nb)`
 - Foreslatt kategori: `Productivity`
 - Homepage URL: `https://oleremidahl.github.io/pendle-tid/`
 - Support URL: `https://oleremidahl.github.io/pendle-tid/support/`
@@ -15,9 +15,9 @@ Sammenlign kollektiv pendletid og ren gangtid direkte i FINN-boligannonser.
 
 ## Full Description
 
-Finn Pendle Tid gjor boligjakten pa FINN.no mer praktisk for pendlere.
+Finn Pendle Tid gjør boligjakten på FINN.no mer praktisk for pendlere.
 
-Utvidelsen viser en liten popup overst til hoyre pa boligannonser for kjop og leie, og sammenligner to alternativer:
+Utvidelsen viser en liten popup overst til hoyre pa boligannonser for kjøp og leie, og sammenligner to alternativer:
 
 - kollektiv reisetid til reisemalet ditt
 - total tid og distanse hvis du gar hele veien
@@ -36,7 +36,7 @@ Finn Pendle Tid fungerer kun pa FINN.no sine boligsider og bruker Entur for geok
 
 ## Single Purpose Field
 
-Denne utvidelsen har ett formal: a sammenligne kollektiv pendletid og ren gangtid fra FINN-boligannonser til et brukerdefinert reisemal.
+Denne utvidelsen har ett formål: å sammenligne kollektiv pendletid og ren gangtid fra FINN-boligannonser til et brukerdefinert reisemål.
 
 ## Permission Justification
 
@@ -74,22 +74,22 @@ Denne utvidelsen har ett formal: a sammenligne kollektiv pendletid og ren gangti
 
 ## Reviewer Notes
 
-Finn Pendle Tid har ett brukerrettet formal: a vise sammenlignbar pendletid pa FINN sine boligannonser.
+Finn Pendle Tid har ett brukerrettet formål: å vise sammenlignbar pendletid på FINN sine boligannonser.
 
-Teknisk oppforer utvidelsen seg slik:
+Teknisk oppfører utvidelsen seg slik:
 
-- den injiseres bare pa FINN.no sine boligsider for kjop og leie
+- den injiseres bare på FINN.no sine boligsider for kjøp og leie
 - den leser bare adresseteksten i den aktuelle annonsen
-- den sender bare nodvendige adresseopplysninger til Entur for geokoding og ruteoppslag
+- den sender bare nødvendige adresseopplysninger til Entur for geokoding og ruteoppslag
 - den har ingen egen backend og laster ikke fjernkode
 - den bruker ikke analyser, annonser eller sporing
-- den lagrer bare reisemal og ankomsttid i `chrome.storage.sync`
+- den lagrer bare reisemål og ankomsttid i `chrome.storage.sync`
 
 ## Screenshot Checklist
 
 Chrome Web Store krever minst ett skjermbilde, og anbefaler opptil fem. Hvert skjermbilde bor vare `1280x800` eller `640x400`, full bleed og vise faktisk brukeropplevelse.
 
-For denne forste publiseringen:
+For denne første publiseringen:
 
 1. `01-options-search-dropdown.png`
    - options-siden med apent sokeforslagsfelt for reisemal
@@ -98,4 +98,4 @@ For denne forste publiseringen:
 3. `03-finn-rental-popup-expanded.png`
    - FINN leieannonse med popup og utvidet kollektivdetalj
 
-Se ogsa [docs/screenshots/README.md](/Users/oleremidahl/Documents/Meg/Prog/pendle-tid/docs/screenshots/README.md).
+Se også [docs/screenshots/README.md](/docs/screenshots/README.md).
