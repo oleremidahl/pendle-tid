@@ -3,6 +3,7 @@ const CARD_ID = "finn-pendle-card";
 const CLIENT_NAME = "finn-pendle-tid-extension";
 const OSLO_TIME_ZONE = "Europe/Oslo";
 const DEFAULT_ARRIVAL_TIME = "08:00";
+const GEOCODER_FALLBACK_SIZE = 6;
 const SETTINGS_KEYS = ["destinationLabel", "destinationCoordinates", "arrivalTime"];
 const RETRY_LIMIT = 20;
 const RETRY_DELAY_MS = 400;
@@ -236,8 +237,19 @@ async function getSettings() {
   };
 }
 
-function buildGeocoderUrl(queryText) {
-  return `https://api.entur.io/geocoder/v1/search?text=${encodeURIComponent(queryText)}&layers=address&size=1&lang=no`;
+function buildGeocoderUrl(queryText, options = {}) {
+  const params = new URLSearchParams({
+    text: queryText,
+    size: String(options.size || 1),
+    lang: "no"
+  });
+
+  const layers = normalizeText(options.layers);
+  if (layers) {
+    params.set("layers", layers);
+  }
+
+  return `https://api.entur.io/geocoder/v1/search?${params.toString()}`;
 }
 
 async function fetchJson(url, options) {
@@ -248,24 +260,49 @@ async function fetchJson(url, options) {
   return response.json();
 }
 
-async function geocodePlace(queryText, signal) {
-  const data = await fetchJson(buildGeocoderUrl(queryText), {
-    headers: { "ET-Client-Name": CLIENT_NAME },
-    signal
-  });
-
-  const feature = data?.features?.[0];
+function mapFeatureToPlace(feature, fallbackLabel) {
   const coordinates = feature?.geometry?.coordinates;
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
 
-  return {
+  const place = {
     lon: Number(coordinates[0]),
     lat: Number(coordinates[1]),
     label:
       feature?.properties?.label ||
       feature?.properties?.name ||
-      normalizeText(queryText)
+      fallbackLabel
   };
+
+  return hasValidCoordinates(place) ? place : null;
+}
+
+function extractPlaceFromSearch(data, fallbackLabel) {
+  const features = Array.isArray(data?.features) ? data.features : [];
+  for (const feature of features) {
+    const place = mapFeatureToPlace(feature, fallbackLabel);
+    if (place) return place;
+  }
+  return null;
+}
+
+async function geocodePlace(queryText, signal) {
+  const normalizedQuery = normalizeText(queryText);
+  const requestOptions = [
+    { layers: "address", size: 1 },
+    { size: GEOCODER_FALLBACK_SIZE }
+  ];
+
+  for (const options of requestOptions) {
+    const data = await fetchJson(buildGeocoderUrl(normalizedQuery, options), {
+      headers: { "ET-Client-Name": CLIENT_NAME },
+      signal
+    });
+
+    const place = extractPlaceFromSearch(data, normalizedQuery);
+    if (place) return place;
+  }
+
+  return null;
 }
 
 function buildTripQuery({ from, to, arrivalIso, walkingOnly }) {
@@ -469,7 +506,7 @@ function renderCard(model) {
     createPanel(model.transit, {
       title: "Kollektiv",
       eyebrow: `Hverdager før ${model.arrivalTime}`,
-      emptyText: "Fant ingen kollektivrute for valgt tidspunkt.",
+      emptyText: model.transitEmptyText || "Fant ingen kollektivrute for valgt tidspunkt.",
       showDetails: true
     })
   );
@@ -477,7 +514,7 @@ function renderCard(model) {
     createPanel(model.walking, {
       title: "Gå hele veien",
       eyebrow: "Kun gange",
-      emptyText: "Fant ingen gangrute for hele strekningen.",
+      emptyText: model.walkingEmptyText || "Fant ingen gangrute for hele strekningen.",
       showDetails: false
     })
   );
@@ -523,7 +560,7 @@ async function refreshCard(addressElement, addressText) {
       renderCard({
         ...cardContext,
         status: "no_route",
-        message: "Adressen i annonsen kunne ikke kobles til et sted hos Entur."
+        message: "Stedet i annonsen kunne ikke kobles til et brukbart sted hos Entur."
       });
       return;
     }
@@ -535,7 +572,7 @@ async function refreshCard(addressElement, addressText) {
       lon: Number(settings.destinationCoordinates.lon)
     };
 
-    const [transitPattern, walkingPattern] = await Promise.all([
+    const [transitResult, walkingResult] = await Promise.allSettled([
       fetchTripPattern({
         from: origin,
         to: destination,
@@ -554,10 +591,35 @@ async function refreshCard(addressElement, addressText) {
 
     if (requestId !== currentRequestId || isCardDismissed) return;
 
-    const transit = normalizeRoute(transitPattern, "transit");
-    const walking = normalizeRoute(walkingPattern, "walking");
+    const transitFailed = transitResult.status === "rejected";
+    const walkingFailed = walkingResult.status === "rejected";
+
+    if (transitFailed) {
+      console.warn("Finn Pendle Tid: Klarte ikke å hente kollektivruten.", transitResult.reason);
+    }
+    if (walkingFailed) {
+      console.warn("Finn Pendle Tid: Klarte ikke å hente gangruten.", walkingResult.reason);
+    }
+
+    const transit =
+      transitResult.status === "fulfilled"
+        ? normalizeRoute(transitResult.value, "transit")
+        : null;
+    const walking =
+      walkingResult.status === "fulfilled"
+        ? normalizeRoute(walkingResult.value, "walking")
+        : null;
 
     if (!transit && !walking) {
+      if (transitFailed || walkingFailed) {
+        renderCard({
+          ...cardContext,
+          status: "error",
+          message: "Vi klarte ikke å hente rutedata akkurat nå. Prøv igjen om litt eller last siden på nytt."
+        });
+        return;
+      }
+
       renderCard({
         ...cardContext,
         status: "no_route",
@@ -571,7 +633,13 @@ async function refreshCard(addressElement, addressText) {
       status: "ready",
       arrivalTime,
       transit,
-      walking
+      walking,
+      transitEmptyText: transitFailed
+        ? "Klarte ikke å hente kollektivruten akkurat nå."
+        : "Fant ingen kollektivrute for valgt tidspunkt.",
+      walkingEmptyText: walkingFailed
+        ? "Klarte ikke å hente gangruten akkurat nå."
+        : "Fant ingen gangrute for hele strekningen."
     });
   } catch (error) {
     if (error?.name === "AbortError") return;
@@ -625,4 +693,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 runLookup();
-window.setTimeout(() => runLookup(), 1200);
+window.setTimeout(() => {
+  if (!activeController && !document.getElementById(CARD_ID)) {
+    runLookup();
+  }
+}, 1200);
