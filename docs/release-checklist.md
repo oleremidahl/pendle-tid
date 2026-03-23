@@ -33,9 +33,11 @@
 1. Kjor:
 
    ```bash
+   ./scripts/check-extension.sh
    ./scripts/package-extension.sh
    ```
 
-2. Kontroller at zip-filen bare inneholder runtime-filene for utvidelsen.
-3. Last inn zip-innholdet som unpacked build i Chrome og gjor en siste smoke test.
-4. Last opp zip-filen til Chrome Web Store.
+2. Bekreft at GitHub Actions CI er gronn for branchen eller PR-en som skal publiseres.
+3. Kontroller at zip-filen bare inneholder runtime-filene for utvidelsen.
+4. Last inn zip-innholdet som unpacked build i Chrome og gjor en siste smoke test.
+5. Last opp zip-filen til Chrome Web Store.
