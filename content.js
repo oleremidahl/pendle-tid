@@ -439,7 +439,9 @@ function createControlButton(label, options = {}) {
   if (options.ariaLabel) {
     button.setAttribute("aria-label", options.ariaLabel);
   }
-  button.addEventListener("click", options.onClick);
+  if (typeof options.onClick === "function") {
+    button.addEventListener("click", options.onClick);
+  }
   return button;
 }
 
@@ -618,6 +620,8 @@ function removeCard() {
 function dismissCard() {
   isCardDismissed = true;
   abortActiveRequest();
+  lookupObserver?.disconnect();
+  lookupObserver = null;
   clearLookupScanTimer();
   clearCollapseTimer();
   removeCard();
@@ -933,6 +937,7 @@ function resetForNewListing() {
 chrome.runtime.onMessage.addListener((request) => {
   if (request?.action === "REFRESH_ADDRESS") {
     isCardDismissed = false;
+    startLookupObserver();
     resetForNewListing();
     scheduleLookupScan();
   }
@@ -942,6 +947,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "sync") return;
   if (SETTINGS_KEYS.some((key) => Object.prototype.hasOwnProperty.call(changes, key))) {
     isCardDismissed = false;
+    startLookupObserver();
     if (currentAddressText) {
       refreshCard(currentAddressElement, currentAddressText);
       return;
