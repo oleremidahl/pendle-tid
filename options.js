@@ -18,6 +18,7 @@ let activeSuggestionIndex = -1;
 let suggestionRequestId = 0;
 let suggestionController = null;
 let suggestionTimer = null;
+let savedDestination = null;
 
 function storageGet(keys) {
   return new Promise((resolve, reject) => {
@@ -57,6 +58,10 @@ function storageRemove(keys) {
 
 function normalizeText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeLabelForMatch(value) {
+  return normalizeText(value).toLowerCase();
 }
 
 function setBusy(isBusy) {
@@ -232,46 +237,18 @@ async function searchDestinations(queryText, signal) {
     .filter((item) => item && item.label && hasValidCoordinates(item.destinationCoordinates));
 }
 
-async function geocodePlace(queryText) {
-  const response = await fetch(
-    `https://api.entur.io/geocoder/v1/search?text=${encodeURIComponent(queryText)}&layers=address&size=1&lang=no`,
-    {
-      headers: { "ET-Client-Name": CLIENT_NAME }
-    }
-  );
+function getDestinationForSave(queryText) {
+  const comparableQuery = normalizeLabelForMatch(queryText);
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-  const feature = data?.features?.[0];
-  const coordinates = feature?.geometry?.coordinates;
-  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
-
-  return {
-    label:
-      feature?.properties?.label ||
-      feature?.properties?.name ||
-      normalizeText(queryText),
-    destinationCoordinates: {
-      lat: Number(coordinates[1]),
-      lon: Number(coordinates[0])
-    }
-  };
-}
-
-async function resolveDestinationForSave(queryText) {
-  if (selectedDestination && normalizeText(selectedDestination.label) === queryText) {
+  if (selectedDestination && normalizeLabelForMatch(selectedDestination.label) === comparableQuery) {
     return selectedDestination;
   }
 
-  const suggestions = await searchDestinations(queryText);
-  if (suggestions.length) {
-    return suggestions[0];
+  if (savedDestination && normalizeLabelForMatch(savedDestination.label) === comparableQuery) {
+    return savedDestination;
   }
 
-  return geocodePlace(queryText);
+  return null;
 }
 
 function scheduleDestinationSearch() {
@@ -320,13 +297,14 @@ async function loadSettings() {
   };
 
   destinationInput.value = normalized.destinationLabel || "";
-  selectedDestination = normalized.destinationLabel && normalized.destinationCoordinates
+  savedDestination = normalized.destinationLabel && normalized.destinationCoordinates
     ? {
         label: normalized.destinationLabel,
         meta: "",
         destinationCoordinates: normalized.destinationCoordinates
       }
     : null;
+  selectedDestination = savedDestination;
   arrivalTimeInput.value = normalized.arrivalTime;
   updateSavedState(normalized);
   clearSuggestions();
@@ -347,9 +325,13 @@ async function handleSave(event) {
 
   setBusy(true);
   try {
-    const result = await resolveDestinationForSave(destinationText);
+    const result = getDestinationForSave(destinationText);
     if (!result) {
-      setStatus("error", "Fant ikke noe reisemål hos Entur. Prøv en mer presis adresse.");
+      setStatus("error", "Velg et reisemål fra Entur-listen før du lagrer.");
+      if (destinationSuggestions.length) {
+        renderSuggestions();
+      }
+      destinationInput.focus();
       return;
     }
 
@@ -361,6 +343,7 @@ async function handleSave(event) {
 
     await storageSet(values);
     destinationInput.value = result.label;
+    savedDestination = result;
     selectedDestination = result;
     clearSuggestions();
     updateSavedState(values);
@@ -379,6 +362,7 @@ async function handleReset() {
   try {
     await storageRemove(SETTINGS_KEYS);
     destinationInput.value = "";
+    savedDestination = null;
     selectedDestination = null;
     clearSuggestions();
     arrivalTimeInput.value = DEFAULT_ARRIVAL_TIME;

@@ -1,11 +1,24 @@
-const ADDRESS_SELECTOR = '[data-testid="object-address"]';
+const ADDRESS_SELECTORS = [
+  '[data-testid="object-address"]',
+  '[data-testid="object-location"]',
+  '[data-testid="location"]',
+  '[data-testid*="address"]',
+  '[data-testid*="location"]',
+  'a[href*="/kart?finnkode="]',
+  'a[href*="kart?finnkode="]'
+];
 const CARD_ID = "finn-pendle-card";
 const CLIENT_NAME = "finn-pendle-tid-extension";
 const OSLO_TIME_ZONE = "Europe/Oslo";
 const DEFAULT_ARRIVAL_TIME = "08:00";
+const GEOCODER_FALLBACK_SIZE = 6;
+const ADDRESS_SCAN_DELAY_MS = 80;
+const AUTO_COLLAPSE_DELAY_MS = 10000;
 const SETTINGS_KEYS = ["destinationLabel", "destinationCoordinates", "arrivalTime"];
-const RETRY_LIMIT = 20;
-const RETRY_DELAY_MS = 400;
+const ADDRESS_TEXT_REJECT_PATTERNS = [
+  /^(vis|se|apne|åpne)\s+(?:i\s+)?kart$/i,
+  /^(kart|beliggenhet|adresse)$/i
+];
 
 const osloDateTimeFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: OSLO_TIME_ZONE,
@@ -25,8 +38,18 @@ const osloOffsetFormatter = new Intl.DateTimeFormat("en-US", {
 
 let currentRequestId = 0;
 let activeController = null;
-let retryTimer = null;
 let isCardDismissed = false;
+let lookupObserver = null;
+let lookupScanTimer = null;
+let currentAddressElement = null;
+let currentAddressText = "";
+let lastLookupAddressText = "";
+let lastRenderedModel = null;
+let collapseTimer = null;
+let cardViewMode = "expanded";
+let hasAutoCollapsed = false;
+let autoCollapseDeadline = 0;
+let isPinnedExpanded = false;
 
 function createElement(tagName, className, textContent) {
   const node = document.createElement(tagName);
@@ -35,10 +58,10 @@ function createElement(tagName, className, textContent) {
   return node;
 }
 
-function resetRetryTimer() {
-  if (retryTimer) {
-    clearTimeout(retryTimer);
-    retryTimer = null;
+function clearLookupScanTimer() {
+  if (lookupScanTimer) {
+    clearTimeout(lookupScanTimer);
+    lookupScanTimer = null;
   }
 }
 
@@ -51,6 +74,13 @@ function abortActiveRequest() {
 
 function normalizeText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
+}
+
+function clearCollapseTimer() {
+  if (collapseTimer) {
+    clearTimeout(collapseTimer);
+    collapseTimer = null;
+  }
 }
 
 function parseTime(value) {
@@ -135,6 +165,43 @@ function formatMinutes(seconds) {
 
 function hasValidCoordinates(coordinates) {
   return Number.isFinite(Number(coordinates?.lat)) && Number.isFinite(Number(coordinates?.lon));
+}
+
+function isLikelyAddressText(value) {
+  const text = normalizeText(value);
+  if (!text || text.length < 2 || text.length > 140) return false;
+  if (!/\p{L}/u.test(text)) return false;
+  return !ADDRESS_TEXT_REJECT_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function getAddressTextFromElement(element) {
+  const candidates = [
+    element?.innerText,
+    element?.textContent,
+    element?.getAttribute?.("aria-label"),
+    element?.getAttribute?.("title")
+  ];
+
+  for (const candidate of candidates) {
+    const text = normalizeText(candidate);
+    if (isLikelyAddressText(text)) return text;
+  }
+
+  return "";
+}
+
+function findAddressMatch() {
+  for (const selector of ADDRESS_SELECTORS) {
+    const elements = document.querySelectorAll(selector);
+    for (const element of elements) {
+      const text = getAddressTextFromElement(element);
+      if (text) {
+        return { element, text };
+      }
+    }
+  }
+
+  return null;
 }
 
 function sumWalkingDistance(legs) {
@@ -236,8 +303,19 @@ async function getSettings() {
   };
 }
 
-function buildGeocoderUrl(queryText) {
-  return `https://api.entur.io/geocoder/v1/search?text=${encodeURIComponent(queryText)}&layers=address&size=1&lang=no`;
+function buildGeocoderUrl(queryText, options = {}) {
+  const params = new URLSearchParams({
+    text: queryText,
+    size: String(options.size || 1),
+    lang: "no"
+  });
+
+  const layers = normalizeText(options.layers);
+  if (layers) {
+    params.set("layers", layers);
+  }
+
+  return `https://api.entur.io/geocoder/v1/search?${params.toString()}`;
 }
 
 async function fetchJson(url, options) {
@@ -248,24 +326,49 @@ async function fetchJson(url, options) {
   return response.json();
 }
 
-async function geocodePlace(queryText, signal) {
-  const data = await fetchJson(buildGeocoderUrl(queryText), {
-    headers: { "ET-Client-Name": CLIENT_NAME },
-    signal
-  });
-
-  const feature = data?.features?.[0];
+function mapFeatureToPlace(feature, fallbackLabel) {
   const coordinates = feature?.geometry?.coordinates;
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
 
-  return {
+  const place = {
     lon: Number(coordinates[0]),
     lat: Number(coordinates[1]),
     label:
       feature?.properties?.label ||
       feature?.properties?.name ||
-      normalizeText(queryText)
+      fallbackLabel
   };
+
+  return hasValidCoordinates(place) ? place : null;
+}
+
+function extractPlaceFromSearch(data, fallbackLabel) {
+  const features = Array.isArray(data?.features) ? data.features : [];
+  for (const feature of features) {
+    const place = mapFeatureToPlace(feature, fallbackLabel);
+    if (place) return place;
+  }
+  return null;
+}
+
+async function geocodePlace(queryText, signal) {
+  const normalizedQuery = normalizeText(queryText);
+  const requestOptions = [
+    { layers: "address", size: 1 },
+    { size: GEOCODER_FALLBACK_SIZE }
+  ];
+
+  for (const options of requestOptions) {
+    const data = await fetchJson(buildGeocoderUrl(normalizedQuery, options), {
+      headers: { "ET-Client-Name": CLIENT_NAME },
+      signal
+    });
+
+    const place = extractPlaceFromSearch(data, normalizedQuery);
+    if (place) return place;
+  }
+
+  return null;
 }
 
 function buildTripQuery({ from, to, arrivalIso, walkingOnly }) {
@@ -326,23 +429,126 @@ function createInfoLine(text) {
   return createElement("p", "fpt-message-copy", text);
 }
 
-function createActionButton(label) {
-  const button = createElement("button", "fpt-link-button", label);
+function createControlButton(label, options = {}) {
+  const button = createElement(
+    "button",
+    options.className || "fpt-link-button",
+    label
+  );
   button.type = "button";
-  button.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "OPEN_OPTIONS" });
-  });
+  if (options.ariaLabel) {
+    button.setAttribute("aria-label", options.ariaLabel);
+  }
+  if (typeof options.onClick === "function") {
+    button.addEventListener("click", options.onClick);
+  }
   return button;
 }
 
-function createCloseButton() {
-  const button = createElement("button", "fpt-link-button fpt-icon-button", "×");
-  button.type = "button";
-  button.setAttribute("aria-label", "Lukk pendlevindu");
-  button.addEventListener("click", () => {
-    dismissCard();
+function createActionButton(label) {
+  return createControlButton(label, {
+    onClick: () => {
+      chrome.runtime.sendMessage({ action: "OPEN_OPTIONS" });
+    }
   });
-  return button;
+}
+
+function createSettingsIconButton() {
+  return createControlButton("⚙", {
+    className: "fpt-link-button fpt-icon-button fpt-settings-button",
+    ariaLabel: "Åpne innstillinger",
+    onClick: () => {
+      chrome.runtime.sendMessage({ action: "OPEN_OPTIONS" });
+    }
+  });
+}
+
+function createCloseButton() {
+  return createControlButton("×", {
+    className: "fpt-link-button fpt-icon-button",
+    ariaLabel: "Lukk pendlevindu",
+    onClick: () => {
+      dismissCard();
+    }
+  });
+}
+
+function createMinimizeButton() {
+  return createControlButton("Minimer", {
+    onClick: () => {
+      collapseCard();
+    }
+  });
+}
+
+function createExpandButton() {
+  return createControlButton("Utvid", {
+    onClick: () => {
+      expandCard();
+    }
+  });
+}
+
+function resetCardViewState() {
+  clearCollapseTimer();
+  lastRenderedModel = null;
+  cardViewMode = "expanded";
+  hasAutoCollapsed = false;
+  autoCollapseDeadline = 0;
+  isPinnedExpanded = false;
+}
+
+function collapseCard(options = {}) {
+  if (!lastRenderedModel) return;
+
+  clearCollapseTimer();
+  autoCollapseDeadline = 0;
+  if (options.auto) {
+    hasAutoCollapsed = true;
+  }
+  cardViewMode = "collapsed";
+  renderCard(lastRenderedModel);
+}
+
+function expandCard() {
+  if (!lastRenderedModel) return;
+
+  clearCollapseTimer();
+  autoCollapseDeadline = 0;
+  isPinnedExpanded = true;
+  cardViewMode = "expanded";
+  renderCard(lastRenderedModel);
+}
+
+function syncAutoCollapse(model, isCollapsed) {
+  if (model.status !== "ready" || isCollapsed || hasAutoCollapsed || isPinnedExpanded) {
+    clearCollapseTimer();
+    return;
+  }
+
+  if (!autoCollapseDeadline) {
+    autoCollapseDeadline = Date.now() + AUTO_COLLAPSE_DELAY_MS;
+  }
+
+  if (collapseTimer) return;
+
+  const remainingDelay = Math.max(0, autoCollapseDeadline - Date.now());
+  collapseTimer = window.setTimeout(() => {
+    collapseTimer = null;
+
+    if (isCardDismissed || isPinnedExpanded || hasAutoCollapsed || cardViewMode === "collapsed") {
+      return;
+    }
+
+    if (lastRenderedModel?.status !== "ready") {
+      return;
+    }
+
+    hasAutoCollapsed = true;
+    autoCollapseDeadline = 0;
+    cardViewMode = "collapsed";
+    renderCard(lastRenderedModel);
+  }, remainingDelay);
 }
 
 function createPanel(route, config) {
@@ -385,6 +591,19 @@ function createPanel(route, config) {
   return panel;
 }
 
+function createCollapsedRouteSummary(title, route) {
+  const item = createElement("div", "fpt-collapsed-item");
+  item.append(createElement("span", "fpt-collapsed-label", title));
+  item.append(
+    createElement(
+      "span",
+      `fpt-collapsed-value${route ? "" : " is-muted"}`,
+      route?.totalDuration || "Ingen rute"
+    )
+  );
+  return item;
+}
+
 function getCard() {
   let card = document.getElementById(CARD_ID);
   if (!card) {
@@ -401,7 +620,10 @@ function removeCard() {
 function dismissCard() {
   isCardDismissed = true;
   abortActiveRequest();
-  resetRetryTimer();
+  lookupObserver?.disconnect();
+  lookupObserver = null;
+  clearLookupScanTimer();
+  clearCollapseTimer();
   removeCard();
 }
 
@@ -414,8 +636,38 @@ function mountCard(addressElement) {
 
 function renderCard(model) {
   if (isCardDismissed) return;
+  lastRenderedModel = model;
   const card = mountCard(model.addressElement);
+  const isCollapsed = model.status === "ready" && cardViewMode === "collapsed";
+  card.classList.toggle("is-collapsed", isCollapsed);
   card.replaceChildren();
+
+  if (isCollapsed) {
+    const compactHeader = createElement("div", "fpt-collapsed-head");
+    compactHeader.append(createElement("p", "fpt-collapsed-title", "Pendleoversikt"));
+
+    const compactActions = createElement("div", "fpt-header-actions");
+    compactActions.append(createExpandButton());
+    compactActions.append(createCloseButton());
+    compactHeader.append(compactActions);
+    card.append(compactHeader);
+
+    const summary = createElement("button", "fpt-collapsed-summary");
+    summary.type = "button";
+    summary.setAttribute("aria-label", "Utvid pendleoversikten");
+    summary.addEventListener("click", () => {
+      expandCard();
+    });
+
+    const summaryGrid = createElement("div", "fpt-collapsed-grid");
+    summaryGrid.append(createCollapsedRouteSummary("Kollektiv", model.transit));
+    summaryGrid.append(createCollapsedRouteSummary("Gå", model.walking));
+    summary.append(summaryGrid);
+    card.append(summary);
+
+    syncAutoCollapse(model, true);
+    return;
+  }
 
   const header = createElement("div", "fpt-header");
   const headerCopy = createElement("div", "fpt-header-copy");
@@ -426,7 +678,10 @@ function renderCard(model) {
   }
   header.append(headerCopy);
   const headerActions = createElement("div", "fpt-header-actions");
-  headerActions.append(createActionButton("Innstillinger"));
+  headerActions.append(createSettingsIconButton());
+  if (model.status === "ready") {
+    headerActions.append(createMinimizeButton());
+  }
   headerActions.append(createCloseButton());
   header.append(headerActions);
   card.append(header);
@@ -469,7 +724,7 @@ function renderCard(model) {
     createPanel(model.transit, {
       title: "Kollektiv",
       eyebrow: `Hverdager før ${model.arrivalTime}`,
-      emptyText: "Fant ingen kollektivrute for valgt tidspunkt.",
+      emptyText: model.transitEmptyText || "Fant ingen kollektivrute for valgt tidspunkt.",
       showDetails: true
     })
   );
@@ -477,11 +732,13 @@ function renderCard(model) {
     createPanel(model.walking, {
       title: "Gå hele veien",
       eyebrow: "Kun gange",
-      emptyText: "Fant ingen gangrute for hele strekningen.",
+      emptyText: model.walkingEmptyText || "Fant ingen gangrute for hele strekningen.",
       showDetails: false
     })
   );
   card.append(panels);
+
+  syncAutoCollapse(model, false);
 }
 
 async function refreshCard(addressElement, addressText) {
@@ -523,7 +780,7 @@ async function refreshCard(addressElement, addressText) {
       renderCard({
         ...cardContext,
         status: "no_route",
-        message: "Adressen i annonsen kunne ikke kobles til et sted hos Entur."
+        message: "Stedet i annonsen kunne ikke kobles til et brukbart sted hos Entur."
       });
       return;
     }
@@ -535,7 +792,7 @@ async function refreshCard(addressElement, addressText) {
       lon: Number(settings.destinationCoordinates.lon)
     };
 
-    const [transitPattern, walkingPattern] = await Promise.all([
+    const [transitResult, walkingResult] = await Promise.allSettled([
       fetchTripPattern({
         from: origin,
         to: destination,
@@ -554,10 +811,35 @@ async function refreshCard(addressElement, addressText) {
 
     if (requestId !== currentRequestId || isCardDismissed) return;
 
-    const transit = normalizeRoute(transitPattern, "transit");
-    const walking = normalizeRoute(walkingPattern, "walking");
+    const transitFailed = transitResult.status === "rejected";
+    const walkingFailed = walkingResult.status === "rejected";
+
+    if (transitFailed) {
+      console.warn("Finn Pendle Tid: Klarte ikke å hente kollektivruten.", transitResult.reason);
+    }
+    if (walkingFailed) {
+      console.warn("Finn Pendle Tid: Klarte ikke å hente gangruten.", walkingResult.reason);
+    }
+
+    const transit =
+      transitResult.status === "fulfilled"
+        ? normalizeRoute(transitResult.value, "transit")
+        : null;
+    const walking =
+      walkingResult.status === "fulfilled"
+        ? normalizeRoute(walkingResult.value, "walking")
+        : null;
 
     if (!transit && !walking) {
+      if (transitFailed || walkingFailed) {
+        renderCard({
+          ...cardContext,
+          status: "error",
+          message: "Vi klarte ikke å hente rutedata akkurat nå. Prøv igjen om litt eller last siden på nytt."
+        });
+        return;
+      }
+
       renderCard({
         ...cardContext,
         status: "no_route",
@@ -571,7 +853,13 @@ async function refreshCard(addressElement, addressText) {
       status: "ready",
       arrivalTime,
       transit,
-      walking
+      walking,
+      transitEmptyText: transitFailed
+        ? "Klarte ikke å hente kollektivruten akkurat nå."
+        : "Fant ingen kollektivrute for valgt tidspunkt.",
+      walkingEmptyText: walkingFailed
+        ? "Klarte ikke å hente gangruten akkurat nå."
+        : "Fant ingen gangrute for hele strekningen."
     });
   } catch (error) {
     if (error?.name === "AbortError") return;
@@ -589,30 +877,69 @@ async function refreshCard(addressElement, addressText) {
   }
 }
 
-function runLookup(attempt = 0) {
-  if (attempt === 0) {
-    abortActiveRequest();
-  }
-  if (isCardDismissed) return;
-  resetRetryTimer();
-  const addressElement = document.querySelector(ADDRESS_SELECTOR);
-  const addressText = normalizeText(addressElement?.textContent || addressElement?.innerText);
+function resetAddressState() {
+  clearLookupScanTimer();
+  currentAddressElement = null;
+  currentAddressText = "";
+  lastLookupAddressText = "";
+}
 
-  if (!addressElement || !addressText) {
-    if (attempt < RETRY_LIMIT) {
-      retryTimer = window.setTimeout(() => runLookup(attempt + 1), RETRY_DELAY_MS);
-    }
+function inspectCurrentPage() {
+  if (isCardDismissed) return;
+
+  const match = findAddressMatch();
+  if (!match) return;
+
+  currentAddressElement = match.element;
+  currentAddressText = match.text;
+
+  if (match.text === lastLookupAddressText) {
     return;
   }
 
-  refreshCard(addressElement, addressText);
+  lastLookupAddressText = match.text;
+  refreshCard(match.element, match.text);
+}
+
+function scheduleLookupScan() {
+  if (lookupScanTimer || isCardDismissed) return;
+
+  lookupScanTimer = window.setTimeout(() => {
+    lookupScanTimer = null;
+    inspectCurrentPage();
+  }, ADDRESS_SCAN_DELAY_MS);
+}
+
+function startLookupObserver() {
+  if (lookupObserver) return;
+
+  const root = document.body || document.documentElement;
+  if (!root) return;
+
+  lookupObserver = new MutationObserver(() => {
+    scheduleLookupScan();
+  });
+
+  lookupObserver.observe(root, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+}
+
+function resetForNewListing() {
+  abortActiveRequest();
+  resetAddressState();
+  resetCardViewState();
+  removeCard();
 }
 
 chrome.runtime.onMessage.addListener((request) => {
   if (request?.action === "REFRESH_ADDRESS") {
     isCardDismissed = false;
-    removeCard();
-    runLookup();
+    startLookupObserver();
+    resetForNewListing();
+    scheduleLookupScan();
   }
 });
 
@@ -620,9 +947,23 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "sync") return;
   if (SETTINGS_KEYS.some((key) => Object.prototype.hasOwnProperty.call(changes, key))) {
     isCardDismissed = false;
-    runLookup();
+    startLookupObserver();
+    if (currentAddressText) {
+      refreshCard(currentAddressElement, currentAddressText);
+      return;
+    }
+    scheduleLookupScan();
   }
 });
 
-runLookup();
-window.setTimeout(() => runLookup(), 1200);
+window.addEventListener("pagehide", () => {
+  abortActiveRequest();
+  lookupObserver?.disconnect();
+  lookupObserver = null;
+  clearLookupScanTimer();
+  clearCollapseTimer();
+  autoCollapseDeadline = 0;
+});
+
+startLookupObserver();
+scheduleLookupScan();

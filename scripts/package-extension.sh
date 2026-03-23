@@ -33,7 +33,14 @@ rm -f "$ZIP_PATH" "$CHECKSUM_PATH"
 
 zip -qr "$ZIP_PATH" "${FILES[@]}"
 
-shasum -a 256 "$ZIP_PATH" > "$CHECKSUM_PATH"
+if command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 "$ZIP_PATH" > "$CHECKSUM_PATH"
+elif command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$ZIP_PATH" > "$CHECKSUM_PATH"
+else
+  echo "No SHA-256 checksum tool found (expected shasum or sha256sum)." >&2
+  exit 1
+fi
 
 echo "Created package:"
 echo "  $ZIP_PATH"

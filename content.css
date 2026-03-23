@@ -8,7 +8,7 @@
   --fpt-accent-soft: rgba(15, 122, 114, 0.1);
   box-sizing: border-box;
   position: fixed;
-  top: 16px;
+  top: 49px;
   right: 16px;
   z-index: 999999;
   width: min(340px, calc(100vw - 24px));
@@ -21,6 +21,11 @@
   box-shadow: 0 20px 48px rgba(16, 39, 76, 0.18);
   color: var(--fpt-text);
   font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.fpt-card.is-collapsed {
+  width: min(280px, calc(100vw - 24px));
+  padding: 12px;
 }
 
 .fpt-card,
@@ -76,6 +81,9 @@
 }
 
 .fpt-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   padding: 8px 11px;
   border: 1px solid rgba(19, 35, 63, 0.1);
@@ -85,6 +93,7 @@
   font: inherit;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
@@ -103,6 +112,80 @@
   justify-content: center;
   font-size: 16px;
   line-height: 1;
+}
+
+.fpt-settings-button {
+  font-size: 15px;
+}
+
+.fpt-collapsed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fpt-collapsed-title {
+  margin: 0;
+  color: var(--fpt-accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fpt-collapsed-summary {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(19, 35, 63, 0.08);
+  border-radius: 16px;
+  background: var(--fpt-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.fpt-collapsed-summary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(16, 39, 76, 0.08);
+  border-color: rgba(15, 122, 114, 0.22);
+}
+
+.fpt-collapsed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fpt-collapsed-item {
+  min-width: 0;
+}
+
+.fpt-collapsed-label {
+  display: block;
+  color: var(--fpt-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fpt-collapsed-value {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.fpt-collapsed-value.is-muted {
+  color: var(--fpt-muted);
+  font-size: 16px;
+  letter-spacing: 0;
 }
 
 .fpt-message {
@@ -229,7 +312,7 @@
 
 @media (max-width: 760px) {
   .fpt-card {
-    top: 12px;
+    top: 20px;
     right: 12px;
     width: min(320px, calc(100vw - 24px));
     max-height: calc(100vh - 24px);
@@ -239,5 +322,9 @@
 
   .fpt-header {
     gap: 10px;
+  }
+
+  .fpt-card.is-collapsed {
+    width: min(272px, calc(100vw - 24px));
   }
 }

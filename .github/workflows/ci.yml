@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-extension:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Run extension checks
+        run: bash ./scripts/check-extension.sh
+
+      - name: Upload packaged extension
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webstore-package
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: ignore

@@ -22,11 +22,12 @@ Utvidelsen viser en liten popup overst til hoyre pa boligannonser for kjøp og l
 - kollektiv reisetid til reisemalet ditt
 - total tid og distanse hvis du gar hele veien
 
-Du velger selv reisemal og tidspunktet du vil vare fremme. Utvidelsen bruker dette som et fast sammenligningsgrunnlag mot neste hverdag, slik at det blir lettere a sammenligne ulike boliger pa en rettferdig mate.
+Du velger selv reisemal ved a velge riktig Entur-treff i innstillingene, og setter tidspunktet du vil vare fremme. Utvidelsen bruker dette som et fast sammenligningsgrunnlag mot neste hverdag, slik at det blir lettere a sammenligne ulike boliger pa en rettferdig mate.
 
 Hovedfunksjoner:
 
 - kompakt popup direkte pa FINN-boligannonser
+- popupen kan minimeres til en liten totaloversikt og utvides igjen
 - kollektiv + gange vist samtidig
 - utvidbar detaljvisning for kollektivruten
 - sokeforslag for reisemal via Entur
@@ -57,6 +58,8 @@ Denne utvidelsen har ett formål: å sammenligne kollektiv pendletid og ren gang
   - fordi utvidelsen leser adresseteksten pa den aktuelle FINN-annonsen
 - `Location`
   - fordi brukeren lagrer et reisemal som adresse eller koordinater
+- en eventuell egen kategori for brukeroppgitt tekst
+  - hvis Chrome Web Store tolker fritekstsok til Entur som separat brukerinnhold, fordi innstillingssiden sender skrevne reisemalssok til Entur for sokeforslag
 
 ### Certifications to answer "Yes"
 
@@ -65,12 +68,13 @@ Denne utvidelsen har ett formål: å sammenligne kollektiv pendletid og ren gang
 - data brukes ikke til kredittvurdering eller utlansformal
 - data brukes ikke til annonser eller markedsforing
 - data brukes ikke til a bestemme forsikringspriser eller boligtilbud
-- data overfores kun til Entur for geokoding og ruteberegning
+- data overfores kun til Entur for sokeforslag, geokoding og ruteberegning
 
 ### Dashboard notes
 
 - Opplysningene i Privacy-tabben ma matche personvernerklaeringen ordrett i innhold, ikke bare i intensjon.
 - Hvis Chrome Web Store krever en mer konservativ tolkning av lagret reisemal, velg heller en ekstra datakategori enn a underopplyse.
+- Beskriv eksplisitt at innstillingssiden sender tekst brukeren skriver i reisemalsfeltet til Entur for a hente forslag.
 
 ## Reviewer Notes
 
@@ -80,7 +84,9 @@ Teknisk oppfører utvidelsen seg slik:
 
 - den injiseres bare på FINN.no sine boligsider for kjøp og leie
 - den leser bare adresseteksten i den aktuelle annonsen
-- den sender bare nødvendige adresseopplysninger til Entur for geokoding og ruteoppslag
+- den krever at brukeren velger et eksplisitt Entur-treff før nytt reisemal lagres
+- den sender skrevne reisemalssok til Entur for sokeforslag i options-siden
+- den sender nodvendige adresseopplysninger til Entur for geokoding og ruteoppslag
 - den har ingen egen backend og laster ikke fjernkode
 - den bruker ikke analyser, annonser eller sporing
 - den lagrer bare reisemål og ankomsttid i `chrome.storage.sync`
@@ -94,8 +100,10 @@ For denne første publiseringen:
 1. `01-options-search-dropdown.png`
    - options-siden med apent sokeforslagsfelt for reisemal
 2. `02-finn-buy-popup.png`
-   - FINN kjopsannonse med kompakt popup synlig
+   - FINN kjøpsannonse med popup synlig
 3. `03-finn-rental-popup-expanded.png`
    - FINN leieannonse med popup og utvidet kollektivdetalj
+4. `04-finn-popup-minimized``
+   - Popup minimert
 
 Se også [docs/screenshots/README.md](/docs/screenshots/README.md).
