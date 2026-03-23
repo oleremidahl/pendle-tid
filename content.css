@@ -8,7 +8,7 @@
   --fpt-accent-soft: rgba(15, 122, 114, 0.1);
   box-sizing: border-box;
   position: fixed;
-  top: 16px;
+  top: 49px;
   right: 16px;
   z-index: 999999;
   width: min(340px, calc(100vw - 24px));
@@ -312,7 +312,7 @@
 
 @media (max-width: 760px) {
   .fpt-card {
-    top: 12px;
+    top: 20px;
     right: 12px;
     width: min(320px, calc(100vw - 24px));
     max-height: calc(100vh - 24px);

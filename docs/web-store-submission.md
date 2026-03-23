@@ -22,11 +22,12 @@ Utvidelsen viser en liten popup overst til hoyre pa boligannonser for kjøp og l
 - kollektiv reisetid til reisemalet ditt
 - total tid og distanse hvis du gar hele veien
 
-Du velger selv reisemal og tidspunktet du vil vare fremme. Utvidelsen bruker dette som et fast sammenligningsgrunnlag mot neste hverdag, slik at det blir lettere a sammenligne ulike boliger pa en rettferdig mate.
+Du velger selv reisemal ved a velge riktig Entur-treff i innstillingene, og setter tidspunktet du vil vare fremme. Utvidelsen bruker dette som et fast sammenligningsgrunnlag mot neste hverdag, slik at det blir lettere a sammenligne ulike boliger pa en rettferdig mate.
 
 Hovedfunksjoner:
 
 - kompakt popup direkte pa FINN-boligannonser
+- popupen kan minimeres til en liten totaloversikt og utvides igjen
 - kollektiv + gange vist samtidig
 - utvidbar detaljvisning for kollektivruten
 - sokeforslag for reisemal via Entur
@@ -83,6 +84,7 @@ Teknisk oppfører utvidelsen seg slik:
 
 - den injiseres bare på FINN.no sine boligsider for kjøp og leie
 - den leser bare adresseteksten i den aktuelle annonsen
+- den krever at brukeren velger et eksplisitt Entur-treff før nytt reisemal lagres
 - den sender skrevne reisemalssok til Entur for sokeforslag i options-siden
 - den sender nodvendige adresseopplysninger til Entur for geokoding og ruteoppslag
 - den har ingen egen backend og laster ikke fjernkode
@@ -98,8 +100,10 @@ For denne første publiseringen:
 1. `01-options-search-dropdown.png`
    - options-siden med apent sokeforslagsfelt for reisemal
 2. `02-finn-buy-popup.png`
-   - FINN kjopsannonse med kompakt popup synlig
+   - FINN kjøpsannonse med popup synlig
 3. `03-finn-rental-popup-expanded.png`
    - FINN leieannonse med popup og utvidet kollektivdetalj
+4. `04-finn-popup-minimized``
+   - Popup minimert
 
 Se også [docs/screenshots/README.md](/docs/screenshots/README.md).
