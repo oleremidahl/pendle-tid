@@ -14,10 +14,31 @@ const DEFAULT_ARRIVAL_TIME = "08:00";
 const GEOCODER_FALLBACK_SIZE = 6;
 const ADDRESS_SCAN_DELAY_MS = 80;
 const AUTO_COLLAPSE_DELAY_MS = 10000;
+const NIGHT_BUS_WINDOW_START_TIME = "00:00";
+const NIGHT_BUS_WINDOW_START_MINUTES = 0;
+const NIGHT_BUS_WINDOW_END_MINUTES = 5 * 60;
+const NIGHT_BUS_SEARCH_WINDOW = 300;
+const NIGHT_BUS_PAGE_SIZE = 20;
 const SETTINGS_KEYS = ["destinationLabel", "destinationCoordinates", "arrivalTime"];
 const ADDRESS_TEXT_REJECT_PATTERNS = [
   /^(vis|se|apne|åpne)\s+(?:i\s+)?kart$/i,
   /^(kart|beliggenhet|adresse)$/i
+];
+const CITY_CENTRE_ORIGIN = {
+  label: "Jernbanetorget",
+  lat: 59.911898,
+  lon: 10.75038
+};
+const NIGHT_BUS_WEEKEND_DAY_SPECS = [
+  { key: "friSat", label: "Fre-lør", windowDay: 6 },
+  { key: "satSun", label: "Lør-søn", windowDay: 0 }
+];
+const NIGHT_BUS_WEEKDAY_DAY_SPECS = [
+  { key: "sunMon", label: "Søn-man", windowDay: 1 },
+  { key: "monTue", label: "Man-tir", windowDay: 2 },
+  { key: "tueWed", label: "Tir-ons", windowDay: 3 },
+  { key: "wedThu", label: "Ons-tor", windowDay: 4 },
+  { key: "thuFri", label: "Tor-fre", windowDay: 5 }
 ];
 
 const osloDateTimeFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -50,6 +71,10 @@ let cardViewMode = "expanded";
 let hasAutoCollapsed = false;
 let autoCollapseDeadline = 0;
 let isPinnedExpanded = false;
+let nightBusWeekendController = null;
+let nightBusWeekdayController = null;
+let nightBusWeekendRequestId = 0;
+let nightBusWeekdayRequestId = 0;
 
 function createElement(tagName, className, textContent) {
   const node = document.createElement(tagName);
@@ -87,6 +112,16 @@ function parseTime(value) {
   const match = /^(\d{2}):(\d{2})$/.exec(value || "");
   if (!match) return [8, 0];
   return [Number(match[1]), Number(match[2])];
+}
+
+function getMinutesFromClock(value) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value || "");
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function toGraphqlString(value) {
+  return JSON.stringify(String(value));
 }
 
 function toClockString(hours, minutes) {
@@ -145,6 +180,27 @@ function getNextWeekdayArrivalIso(arrivalTime) {
     }
     dayOffset += 1;
   }
+}
+
+function getNightBusWindowStartIso(windowDay) {
+  const nowParts = getDateTimeParts(new Date());
+  const baseDate = new Date(Date.UTC(nowParts.year, nowParts.month - 1, nowParts.day));
+  const currentDay = baseDate.getUTCDay();
+  const currentMinutes = nowParts.hour * 60 + nowParts.minute;
+
+  let dayOffset = (windowDay - currentDay + 7) % 7;
+  if (dayOffset === 0 && currentMinutes >= NIGHT_BUS_WINDOW_END_MINUTES) {
+    dayOffset = 7;
+  }
+
+  const candidate = new Date(baseDate);
+  candidate.setUTCDate(baseDate.getUTCDate() + dayOffset);
+
+  const year = candidate.getUTCFullYear();
+  const month = candidate.getUTCMonth() + 1;
+  const day = candidate.getUTCDate();
+  const offset = getOsloOffsetForDate(year, month, day);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${NIGHT_BUS_WINDOW_START_TIME}:00${offset}`;
 }
 
 function getLocalTimeString(isoString) {
@@ -282,6 +338,24 @@ function normalizeRoute(pattern, variant) {
   };
 }
 
+function createNightBusState(homeCoordinates, requestId) {
+  return {
+    requestId,
+    homeCoordinates: {
+      lat: Number(homeCoordinates.lat),
+      lon: Number(homeCoordinates.lon)
+    },
+    weekendStatus: "loading",
+    weekendDays: [],
+    weekendErrorText: "",
+    weekdaysStatus: "idle",
+    weekdayDays: [],
+    weekdayErrorText: "",
+    isWeekdaysExpanded: false,
+    isDepartureListExpanded: false
+  };
+}
+
 function storageGet(keys) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(keys, (items) => {
@@ -401,6 +475,46 @@ function buildTripQuery({ from, to, arrivalIso, walkingOnly }) {
   }`;
 }
 
+function buildNightBusQuery(daySpecs, destination, cursorByDayKey = {}) {
+  const tripQueries = daySpecs
+    .map(
+      (daySpec) => `
+      ${daySpec.key}: trip(
+        from: { coordinates: { latitude: ${CITY_CENTRE_ORIGIN.lat}, longitude: ${CITY_CENTRE_ORIGIN.lon} } }
+        to: { coordinates: { latitude: ${destination.lat}, longitude: ${destination.lon} } }
+        dateTime: ${toGraphqlString(getNightBusWindowStartIso(daySpec.windowDay))}
+        arriveBy: false
+        searchWindow: ${NIGHT_BUS_SEARCH_WINDOW}
+        numTripPatterns: ${NIGHT_BUS_PAGE_SIZE}
+        walkReluctance: 10
+        modes: {
+          accessMode: foot
+          egressMode: foot
+          directMode: foot
+          transportModes: [{ transportMode: bus }]
+        }
+        ${cursorByDayKey[daySpec.key] ? `pageCursor: ${toGraphqlString(cursorByDayKey[daySpec.key])}` : ""}
+      ) {
+        nextPageCursor
+        tripPatterns {
+          legs {
+            mode
+            expectedStartTime
+            line { publicCode }
+            fromEstimatedCall {
+              quay { name }
+            }
+          }
+        }
+      }`
+    )
+    .join("\n");
+
+  return `{
+    ${tripQueries}
+  }`;
+}
+
 async function fetchTripPattern({ from, to, arrivalIso, walkingOnly, signal }) {
   const query = buildTripQuery({ from, to, arrivalIso, walkingOnly });
   const data = await fetchJson("https://api.entur.io/journey-planner/v3/graphql", {
@@ -420,6 +534,99 @@ async function fetchTripPattern({ from, to, arrivalIso, walkingOnly, signal }) {
   return data?.data?.trip?.tripPatterns?.[0] || null;
 }
 
+function normalizeNightBusPattern(pattern) {
+  const legs = Array.isArray(pattern?.legs) ? pattern.legs : [];
+  const transitLeg = legs.find((leg) => (leg?.mode || "").toUpperCase() !== "FOOT");
+  if ((transitLeg?.mode || "").toUpperCase() !== "BUS") return null;
+
+  const time = getLocalTimeString(transitLeg.expectedStartTime);
+  const minutes = getMinutesFromClock(time);
+  if (minutes === null) return null;
+  if (minutes < NIGHT_BUS_WINDOW_START_MINUTES || minutes > NIGHT_BUS_WINDOW_END_MINUTES) return null;
+
+  return {
+    time,
+    lineCode: normalizeText(transitLeg?.line?.publicCode),
+    fromQuay: normalizeText(transitLeg?.fromEstimatedCall?.quay?.name) || "Ukjent holdeplass"
+  };
+}
+
+function extractNightBusDepartures(patterns) {
+  const uniqueKeys = new Set();
+  const departures = [];
+
+  (patterns || []).forEach((pattern) => {
+    const departure = normalizeNightBusPattern(pattern);
+    if (!departure) return;
+
+    const key = `${departure.time}|${departure.lineCode}|${departure.fromQuay}`;
+    if (uniqueKeys.has(key)) return;
+
+    uniqueKeys.add(key);
+    departures.push(departure);
+  });
+
+  departures.sort((left, right) => {
+    return getMinutesFromClock(left.time) - getMinutesFromClock(right.time);
+  });
+
+  return departures;
+}
+
+function normalizeNightBusResults(dayDataByKey, daySpecs) {
+  return daySpecs.map((daySpec) => ({
+    key: daySpec.key,
+    label: daySpec.label,
+    departures: extractNightBusDepartures(dayDataByKey[daySpec.key] || [])
+  }));
+}
+
+async function fetchNightBusDays({ daySpecs, homeCoordinates, signal }) {
+  const dayDataByKey = Object.fromEntries(daySpecs.map((daySpec) => [daySpec.key, []]));
+  let pendingDaySpecs = [...daySpecs];
+  let cursorByDayKey = {};
+
+  while (pendingDaySpecs.length) {
+    const query = buildNightBusQuery(pendingDaySpecs, homeCoordinates, cursorByDayKey);
+    const data = await fetchJson("https://api.entur.io/journey-planner/v3/graphql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ET-Client-Name": CLIENT_NAME
+      },
+      body: JSON.stringify({ query }),
+      signal
+    });
+
+    if (Array.isArray(data?.errors) && data.errors.length) {
+      throw new Error(data.errors[0]?.message || "GraphQL-feil");
+    }
+
+    const nextPendingDaySpecs = [];
+    const nextCursorByDayKey = {};
+
+    pendingDaySpecs.forEach((daySpec) => {
+      const trip = data?.data?.[daySpec.key];
+      const tripPatterns = Array.isArray(trip?.tripPatterns) ? trip.tripPatterns : [];
+      const pageDepartures = extractNightBusDepartures(tripPatterns);
+      if (tripPatterns.length) {
+        dayDataByKey[daySpec.key].push(...tripPatterns);
+      }
+
+      const nextPageCursor = normalizeText(trip?.nextPageCursor);
+      if (nextPageCursor && pageDepartures.length) {
+        nextPendingDaySpecs.push(daySpec);
+        nextCursorByDayKey[daySpec.key] = nextPageCursor;
+      }
+    });
+
+    pendingDaySpecs = nextPendingDaySpecs;
+    cursorByDayKey = nextCursorByDayKey;
+  }
+
+  return normalizeNightBusResults(dayDataByKey, daySpecs);
+}
+
 function createTag(text) {
   const tag = createElement("span", "fpt-tag", text);
   return tag;
@@ -427,6 +634,144 @@ function createTag(text) {
 
 function createInfoLine(text) {
   return createElement("p", "fpt-message-copy", text);
+}
+
+function getNightBusLastDepartureTime(day) {
+  return day.departures[day.departures.length - 1]?.time || "";
+}
+
+function updateNightBusModel(requestId, updater) {
+  if (requestId !== currentRequestId || isCardDismissed) return;
+  if (!lastRenderedModel || lastRenderedModel.status !== "ready" || !lastRenderedModel.nightBus) return;
+
+  const nextNightBus = updater(lastRenderedModel.nightBus);
+  if (!nextNightBus) return;
+
+  renderCard({
+    ...lastRenderedModel,
+    nightBus: nextNightBus
+  });
+}
+
+async function loadNightBusWeekend(requestId, homeCoordinates) {
+  nightBusWeekendController?.abort();
+  const controller = new AbortController();
+  const bucketRequestId = ++nightBusWeekendRequestId;
+  nightBusWeekendController = controller;
+
+  try {
+    const weekendDays = await fetchNightBusDays({
+      daySpecs: NIGHT_BUS_WEEKEND_DAY_SPECS,
+      homeCoordinates,
+      signal: controller.signal
+    });
+
+    if (requestId !== currentRequestId || bucketRequestId !== nightBusWeekendRequestId || isCardDismissed) {
+      return;
+    }
+
+    updateNightBusModel(requestId, (nightBus) => ({
+      ...nightBus,
+      weekendStatus: "ready",
+      weekendDays,
+      weekendErrorText: ""
+    }));
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+
+    console.warn("Finn Pendle Tid: Klarte ikke å hente nattbuss for helg.", error);
+    if (requestId !== currentRequestId || bucketRequestId !== nightBusWeekendRequestId || isCardDismissed) {
+      return;
+    }
+
+    updateNightBusModel(requestId, (nightBus) => ({
+      ...nightBus,
+      weekendStatus: "error",
+      weekendErrorText: "Klarte ikke å sjekke nattbuss for helg akkurat nå."
+    }));
+  } finally {
+    if (nightBusWeekendController === controller) {
+      nightBusWeekendController = null;
+    }
+  }
+}
+
+async function loadNightBusWeekdays(requestId, homeCoordinates) {
+  nightBusWeekdayController?.abort();
+  const controller = new AbortController();
+  const bucketRequestId = ++nightBusWeekdayRequestId;
+  nightBusWeekdayController = controller;
+
+  try {
+    const weekdayDays = await fetchNightBusDays({
+      daySpecs: NIGHT_BUS_WEEKDAY_DAY_SPECS,
+      homeCoordinates,
+      signal: controller.signal
+    });
+
+    if (requestId !== currentRequestId || bucketRequestId !== nightBusWeekdayRequestId || isCardDismissed) {
+      return;
+    }
+
+    updateNightBusModel(requestId, (nightBus) => ({
+      ...nightBus,
+      weekdaysStatus: "ready",
+      weekdayDays,
+      weekdayErrorText: ""
+    }));
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+
+    console.warn("Finn Pendle Tid: Klarte ikke å hente nattbuss for ukedager.", error);
+    if (requestId !== currentRequestId || bucketRequestId !== nightBusWeekdayRequestId || isCardDismissed) {
+      return;
+    }
+
+    updateNightBusModel(requestId, (nightBus) => ({
+      ...nightBus,
+      weekdaysStatus: "error",
+      weekdayErrorText: "Klarte ikke å sjekke nattbuss for ukedager. Åpne seksjonen igjen for å prøve på nytt."
+    }));
+  } finally {
+    if (nightBusWeekdayController === controller) {
+      nightBusWeekdayController = null;
+    }
+  }
+}
+
+function toggleWeekdayNightBus() {
+  if (!lastRenderedModel || lastRenderedModel.status !== "ready" || !lastRenderedModel.nightBus) return;
+
+  const nightBus = lastRenderedModel.nightBus;
+  const shouldExpand = !nightBus.isWeekdaysExpanded;
+  const shouldLoad =
+    shouldExpand && (nightBus.weekdaysStatus === "idle" || nightBus.weekdaysStatus === "error");
+
+  renderCard({
+    ...lastRenderedModel,
+    nightBus: {
+      ...nightBus,
+      isWeekdaysExpanded: shouldExpand,
+      weekdaysStatus: shouldLoad ? "loading" : nightBus.weekdaysStatus,
+      weekdayErrorText: shouldLoad ? "" : nightBus.weekdayErrorText
+    }
+  });
+
+  if (shouldLoad) {
+    void loadNightBusWeekdays(nightBus.requestId, nightBus.homeCoordinates);
+  }
+}
+
+function toggleNightBusDepartureList() {
+  if (!lastRenderedModel || lastRenderedModel.status !== "ready" || !lastRenderedModel.nightBus) return;
+
+  renderCard({
+    ...lastRenderedModel,
+    nightBus: {
+      ...lastRenderedModel.nightBus,
+      isDepartureListExpanded: !lastRenderedModel.nightBus.isDepartureListExpanded
+    }
+  });
 }
 
 function createControlButton(label, options = {}) {
@@ -487,6 +832,169 @@ function createExpandButton() {
       expandCard();
     }
   });
+}
+
+function createNightBusRow(day) {
+  const row = createElement("div", "fpt-nightbus-row");
+  row.append(createElement("span", "fpt-nightbus-day", day.label));
+
+  const hasDepartures = day.departures.length > 0;
+  const value = createElement("div", `fpt-nightbus-value${hasDepartures ? "" : " is-muted"}`);
+  const summary = createElement("span", "fpt-nightbus-summary", hasDepartures ? "Ja" : "Nei");
+  value.append(summary);
+
+  if (hasDepartures) {
+    value.append(
+      createElement(
+        "span",
+        "fpt-nightbus-last",
+        `Siste ${getNightBusLastDepartureTime(day)}`
+      )
+    );
+  }
+
+  row.append(value);
+  return row;
+}
+
+function createNightBusRows(days) {
+  const rows = createElement("div", "fpt-nightbus-rows");
+  days.forEach((day) => {
+    rows.append(createNightBusRow(day));
+  });
+  return rows;
+}
+
+function createNightBusDepartureTimesRows(days) {
+  const rows = createElement("div", "fpt-nightbus-times");
+
+  days.forEach((day) => {
+    const row = createElement("div", "fpt-nightbus-times-row");
+    row.append(createElement("span", "fpt-nightbus-day", day.label));
+
+    const times = createElement(
+      "div",
+      `fpt-nightbus-times-value${day.departures.length ? "" : " is-muted"}`
+    );
+    times.append(
+      createElement(
+        "span",
+        "fpt-nightbus-times-text",
+        day.departures.length
+          ? day.departures.map((departure) => departure.time).join(" • ")
+          : "Ingen avganger"
+      )
+    );
+
+    row.append(times);
+    rows.append(row);
+  });
+
+  return rows;
+}
+
+function createNightBusSection(nightBus) {
+  if (!nightBus) return null;
+
+  const section = createElement("section", "fpt-nightbus");
+  const header = createElement("div", "fpt-nightbus-head");
+  header.append(createElement("p", "fpt-nightbus-title", "Nattbuss hjem fra sentrum"));
+  header.append(
+    createElement("p", "fpt-nightbus-origin", `Fra ${CITY_CENTRE_ORIGIN.label}`)
+  );
+  section.append(header);
+
+  if (nightBus.weekendStatus === "loading") {
+    section.append(createElement("p", "fpt-nightbus-note", "Sjekker Fre-lør og Lør-søn..."));
+  } else if (nightBus.weekendStatus === "error") {
+    section.append(
+      createElement(
+        "p",
+        "fpt-nightbus-note",
+        nightBus.weekendErrorText || "Klarte ikke å sjekke nattbuss for helg akkurat nå."
+      )
+    );
+  } else {
+    section.append(createNightBusRows(nightBus.weekendDays));
+  }
+
+  section.append(
+    createControlButton(nightBus.isWeekdaysExpanded ? "Skjul ukedager" : "Vis ukedager", {
+      className: "fpt-link-button fpt-nightbus-toggle",
+      onClick: () => {
+        toggleWeekdayNightBus();
+      }
+    })
+  );
+
+  section.append(
+    createControlButton(
+      nightBus.isDepartureListExpanded ? "Skjul avganger" : "Vis avganger 00:00-05:00",
+      {
+        className: "fpt-link-button fpt-nightbus-toggle",
+        onClick: () => {
+          toggleNightBusDepartureList();
+        }
+      }
+    )
+  );
+
+  if (nightBus.isWeekdaysExpanded) {
+    const weekdays = createElement("div", "fpt-nightbus-weekdays");
+    if (nightBus.weekdaysStatus === "loading") {
+      weekdays.append(createElement("p", "fpt-nightbus-note", "Sjekker ukedager..."));
+    } else if (nightBus.weekdaysStatus === "error") {
+      weekdays.append(
+        createElement(
+          "p",
+          "fpt-nightbus-note",
+          nightBus.weekdayErrorText || "Klarte ikke å sjekke nattbuss for ukedager."
+        )
+      );
+    } else if (nightBus.weekdaysStatus === "ready") {
+      weekdays.append(createNightBusRows(nightBus.weekdayDays));
+    }
+
+    section.append(weekdays);
+  }
+
+  if (nightBus.isDepartureListExpanded) {
+    const times = createElement("div", "fpt-nightbus-departure-list");
+
+    if (nightBus.weekendStatus === "loading") {
+      times.append(createElement("p", "fpt-nightbus-note", "Henter avganger for helg..."));
+    } else if (nightBus.weekendStatus === "error") {
+      times.append(
+        createElement(
+          "p",
+          "fpt-nightbus-note",
+          nightBus.weekendErrorText || "Klarte ikke å hente avganger for helg akkurat nå."
+        )
+      );
+    } else {
+      times.append(createNightBusDepartureTimesRows(nightBus.weekendDays));
+    }
+
+    if (nightBus.isWeekdaysExpanded) {
+      if (nightBus.weekdaysStatus === "loading") {
+        times.append(createElement("p", "fpt-nightbus-note", "Henter avganger for ukedager..."));
+      } else if (nightBus.weekdaysStatus === "error") {
+        times.append(
+          createElement(
+            "p",
+            "fpt-nightbus-note",
+            nightBus.weekdayErrorText || "Klarte ikke å hente avganger for ukedager."
+          )
+        );
+      } else if (nightBus.weekdaysStatus === "ready") {
+        times.append(createNightBusDepartureTimesRows(nightBus.weekdayDays));
+      }
+    }
+
+    section.append(times);
+  }
+
+  return section;
 }
 
 function resetCardViewState() {
@@ -562,6 +1070,9 @@ function createPanel(route, config) {
     panel.classList.add("is-muted");
     panel.append(createElement("p", "fpt-panel-duration", "Ingen rute"));
     panel.append(createInfoLine(config.emptyText));
+    if (config.extraContent) {
+      panel.append(config.extraContent);
+    }
     return panel;
   }
 
@@ -588,6 +1099,10 @@ function createPanel(route, config) {
     panel.append(details);
   }
 
+  if (config.extraContent) {
+    panel.append(config.extraContent);
+  }
+
   return panel;
 }
 
@@ -599,6 +1114,41 @@ function createCollapsedRouteSummary(title, route) {
       "span",
       `fpt-collapsed-value${route ? "" : " is-muted"}`,
       route?.totalDuration || "Ingen rute"
+    )
+  );
+  return item;
+}
+
+function getCollapsedNightBusSummary(nightBus) {
+  if (!nightBus || nightBus.weekendStatus === "loading") {
+    return { value: "Sjekker", isMuted: true };
+  }
+
+  if (nightBus.weekendStatus === "error") {
+    return { value: "Ukjent", isMuted: true };
+  }
+
+  const knownDays = [...nightBus.weekendDays];
+  if (nightBus.weekdaysStatus === "ready") {
+    knownDays.push(...nightBus.weekdayDays);
+  }
+
+  const hasNightBus = knownDays.some((day) => day.departures.length > 0);
+  return {
+    value: hasNightBus ? "Ja" : "Nei",
+    isMuted: !hasNightBus
+  };
+}
+
+function createCollapsedNightBusSummary(nightBus) {
+  const summary = getCollapsedNightBusSummary(nightBus);
+  const item = createElement("div", "fpt-collapsed-item");
+  item.append(createElement("span", "fpt-collapsed-label", "Nattbuss"));
+  item.append(
+    createElement(
+      "span",
+      `fpt-collapsed-value${summary.isMuted ? " is-muted" : ""}`,
+      summary.value
     )
   );
   return item;
@@ -620,6 +1170,8 @@ function removeCard() {
 function dismissCard() {
   isCardDismissed = true;
   abortActiveRequest();
+  nightBusWeekendController?.abort();
+  nightBusWeekdayController?.abort();
   lookupObserver?.disconnect();
   lookupObserver = null;
   clearLookupScanTimer();
@@ -662,6 +1214,7 @@ function renderCard(model) {
     const summaryGrid = createElement("div", "fpt-collapsed-grid");
     summaryGrid.append(createCollapsedRouteSummary("Kollektiv", model.transit));
     summaryGrid.append(createCollapsedRouteSummary("Gå", model.walking));
+    summaryGrid.append(createCollapsedNightBusSummary(model.nightBus));
     summary.append(summaryGrid);
     card.append(summary);
 
@@ -725,7 +1278,8 @@ function renderCard(model) {
       title: "Kollektiv",
       eyebrow: `Hverdager før ${model.arrivalTime}`,
       emptyText: model.transitEmptyText || "Fant ingen kollektivrute for valgt tidspunkt.",
-      showDetails: true
+      showDetails: true,
+      extraContent: createNightBusSection(model.nightBus)
     })
   );
   panels.append(
@@ -744,6 +1298,8 @@ function renderCard(model) {
 async function refreshCard(addressElement, addressText) {
   const requestId = ++currentRequestId;
   abortActiveRequest();
+  nightBusWeekendController?.abort();
+  nightBusWeekdayController?.abort();
   const controller = new AbortController();
   activeController = controller;
   const cardContext = {
@@ -854,6 +1410,7 @@ async function refreshCard(addressElement, addressText) {
       arrivalTime,
       transit,
       walking,
+      nightBus: createNightBusState(origin, requestId),
       transitEmptyText: transitFailed
         ? "Klarte ikke å hente kollektivruten akkurat nå."
         : "Fant ingen kollektivrute for valgt tidspunkt.",
@@ -861,6 +1418,8 @@ async function refreshCard(addressElement, addressText) {
         ? "Klarte ikke å hente gangruten akkurat nå."
         : "Fant ingen gangrute for hele strekningen."
     });
+
+    void loadNightBusWeekend(requestId, origin);
   } catch (error) {
     if (error?.name === "AbortError") return;
 
@@ -929,6 +1488,8 @@ function startLookupObserver() {
 
 function resetForNewListing() {
   abortActiveRequest();
+  nightBusWeekendController?.abort();
+  nightBusWeekdayController?.abort();
   resetAddressState();
   resetCardViewState();
   removeCard();
@@ -958,6 +1519,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 window.addEventListener("pagehide", () => {
   abortActiveRequest();
+  nightBusWeekendController?.abort();
+  nightBusWeekdayController?.abort();
   lookupObserver?.disconnect();
   lookupObserver = null;
   clearLookupScanTimer();
