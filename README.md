@@ -75,4 +75,19 @@ Utvidelsen lagrer bare et gyldig Entur-treff, slik at sammenligningen blir stabi
 - Bruker neste hverdag og valgt ankomsttid for å gi mer sammenlignbare pendletall
 - Krever internettilkobling for å hente rutedata
 
+## Terminalkommando
+
+Du kan ogsa kjore samme oppslag i terminalen uten Chrome:
+
+1. Lag en `.env` i prosjektroten med minst `DESTINATION=...`
+2. Kjor `./scripts/lookup-commute.js "Etterstadsletta 76, Oslo"`
+
+Hvis du utelater adressen i kommandoen, blir du bedt om a lime den inn. Skriptet viser:
+- kollektivrute med etapper til `DESTINATION`
+- gangtid og gangdistanse
+- nattbuss fra Jernbanetorget med ja/nei og siste avgang per natt
+
+Valgfritt:
+- `ARRIVAL_TIME=08:00` i `.env` for a overstyre standard tidspunkt
+
 ---
